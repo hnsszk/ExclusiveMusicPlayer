@@ -1,0 +1,20 @@
+# .NET build output (auto-generated, not source)
+bin/
+obj/
+*.user
+*.suo
+.vs/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.idea/
+
+# Release publish output (built exe + bundled api-server)
+publish_output/
+*.zip
