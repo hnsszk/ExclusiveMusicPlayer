@@ -327,6 +327,20 @@ public sealed class NeteaseApiClient
     }
 
     /// <summary>
+    /// 收藏/取消收藏歌单（订阅/退订）。subscribe=true 收藏（t=1），false 取消收藏（t=2）。
+    /// 需要登录；成功后歌单出现在「我的歌单」的收藏分组。
+    /// </summary>
+    public async Task SubscribePlaylistAsync(
+        long playlistId,
+        bool subscribe,
+        CancellationToken cancellationToken = default)
+    {
+        var uri = $"/playlist/subscribe?t={(subscribe ? 1 : 2)}&id={playlistId}";
+        var response = await GetAsync<ApiCodeResponse>(uri, cancellationToken).ConfigureAwait(false);
+        EnsureCode(response.Code, subscribe ? "收藏歌单失败" : "取消收藏歌单失败");
+    }
+
+    /// <summary>
     /// 获取歌曲播放地址。使用官方源（unblock=false）+ 已保存的登录 cookie，
     /// VIP 歌曲在登录后能拿到完整无损音质；未登录自动降级为标准音质/试听。
     /// 返回的 type 字段用于选择解码器（mp3/flac）。

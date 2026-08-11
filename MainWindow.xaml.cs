@@ -182,6 +182,11 @@ public partial class MainWindow : Window
                 if (url is not null)
                 {
                     _viewModel.ApplyLocalApiBaseUrl(url);
+                    // API 现在才真正就绪：补一次登录校验 + 首页加载，把启动期间
+                    // 因 API 未就绪而加载失败/空白的内容补出来，无需重启应用。
+                    await _viewModel.InitializeLoginAsync();
+                    await _viewModel.LoadHomeAsync();
+                    _viewModel.RefreshLikedCoverFromCache();
                 }
                 else if (_splash is not null)
                 {
@@ -327,6 +332,22 @@ public partial class MainWindow : Window
     private void TrackBackButton_Click(object sender, RoutedEventArgs e)
     {
         NavigationList.SelectedIndex = _trackListReturnIndex;
+    }
+
+    /// <summary>
+    /// 头部高度变化时按比例调整标题字号：缩略图随窗口放大时标题同步放大，
+    /// 避免标题与下方按钮之间空隙过大。96px 头部 → 22px，160px 头部 → 30px。
+    /// </summary>
+    private void TrackListHeader_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (TrackListTitleText is null)
+        {
+            return;
+        }
+
+        var height = e.NewSize.Height;
+        var size = 22 + (height - 96) * 0.15;
+        TrackListTitleText.FontSize = size < 20 ? 20 : size > 30 ? 30 : size;
     }
 
     private async void SongList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
@@ -601,6 +622,12 @@ public partial class MainWindow : Window
             await _viewModel.LoadPlaylistTracksAsync(playlist);
             ShowTrackList(HomeIndex);
         }
+    }
+
+    /// <summary>歌曲列表页头部「收藏歌单」按钮：收藏当前歌单。</summary>
+    private async void CollectTrackListButton_Click(object sender, RoutedEventArgs e)
+    {
+        await _viewModel.CollectTrackListPlaylistAsync();
     }
 
     /// <summary>首页推荐歌单区右侧刷新按钮：重新拉取推荐歌单。</summary>

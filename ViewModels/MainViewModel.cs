@@ -66,6 +66,13 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private readonly HashSet<long> _likedSongIds = new();
     /// <summary>防重入：红心/收藏操作请求中（图标闪烁等交互期间防止重复触发）。</summary>
     private bool _isLikeActionInFlight;
+    /// <summary>
+    /// 已收藏歌单 id 集合（决定歌单卡片/行是否显示「收藏」按钮）。
+    /// 与「我收藏的歌单」列表一致：非我创建的歌单即收藏。在「我的歌单」页、登录/登出时刷新。
+    /// </summary>
+    private readonly HashSet<long> _collectedPlaylistIds = new();
+    /// <summary>是否已从服务端拉取过收藏歌单集合（首次启动后台补一次，避免已收藏的歌单仍显示收藏按钮）。</summary>
+    private bool _collectedSetLoaded;
     private ICollectionView? _songsView;
     /// <summary>
     /// WPF UI 线程的 SynchronizationContext。API 内部用 ConfigureAwait(false)，
@@ -133,9 +140,19 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private static readonly (long Id, string Title)[] DailyPlaylists =
     [
         (3136952023L, "私人雷达"),
-        (2829896389L, "日系雷达"),
+        (JpRadarPlaylistId, "日系雷达"),
         (2829816518L, "欧美雷达"),
     ];
+
+    /// <summary>日系雷达歌单 id（该卡片使用固定封面，不从歌单 API 拉）。</summary>
+    private const long JpRadarPlaylistId = 2829896389L;
+
+    /// <summary>
+    /// 「日系雷达」卡片的固定封面：The des Alizes（foxtail-grass studio 制作）的专辑封面。
+    /// 原实现从网易云歌单 API 拉取封面（日更歌单封面长期不变），改用这张更好看的固定图。
+    /// </summary>
+    private const string JpRadarFixedCover =
+        "https://p3.music.126.net/sBQwawfVtfDDmbXV0faGEg==/109951173516039194.jpg";
 
     /// <summary>音质选项（Key 传给接口，Display 显示名）。</summary>
     public sealed record QualityOption(string Key, string Display);
@@ -898,6 +915,45 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         set => SetProperty(ref _trackListTitle, value);
     }
 
+    private string _trackListCoverUrl = string.Empty;
+
+    /// <summary>歌曲列表页头部缩略图（歌单/专辑/歌手/今日推荐/雷达封面）。</summary>
+    public string TrackListCoverUrl
+    {
+        get => _trackListCoverUrl;
+        set => SetProperty(ref _trackListCoverUrl, value);
+    }
+
+    private bool _trackListCollectVisible;
+
+    /// <summary>歌曲列表页头部「收藏歌单」按钮是否显示（可收藏歌单页 true，其余页面 false）。</summary>
+    public bool TrackListCollectVisible
+    {
+        get => _trackListCollectVisible;
+        set => SetProperty(ref _trackListCollectVisible, value);
+    }
+
+    private bool _trackListIsCollected;
+
+    /// <summary>当前歌单是否已在收藏中（决定按钮文案与动作：收藏/取消收藏）。</summary>
+    public bool TrackListIsCollected
+    {
+        get => _trackListIsCollected;
+        set
+        {
+            if (SetProperty(ref _trackListIsCollected, value))
+            {
+                OnPropertyChanged(nameof(TrackListCollectText));
+            }
+        }
+    }
+
+    /// <summary>收藏按钮文案：已收藏时「取消收藏」，否则「收藏歌单」。</summary>
+    public string TrackListCollectText => TrackListIsCollected ? "取消收藏" : "收藏歌单";
+
+    /// <summary>当前歌曲列表页的歌单（仅 LoadPlaylistTracksAsync 进入的歌单页赋值，其余页面为 null）。</summary>
+    private Playlist? _trackListPlaylist;
+
     public bool IsBusy
     {
         get => _isBusy;
@@ -1468,6 +1524,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                 CollectedPlaylists.Add(playlist);
             }
         }
+
+        // 重建收藏 id 集合，供歌单卡片「收藏」按钮判断是否已收藏。
+        RebuildCollectedSet();
     }
 
     /// <summary>
@@ -1493,6 +1552,124 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
         MergePlaylistCollection(CreatedPlaylists, freshCreated);
         MergePlaylistCollection(CollectedPlaylists, freshCollected);
+
+        // 收藏列表更新后重建收藏 id 集合（判断歌单是否已收藏）。
+        RebuildCollectedSet();
+    }
+
+    // ---- 歌单收藏（订阅） ----
+
+    /// <summary>
+    /// 刷新歌曲列表页头部「收藏歌单」按钮的状态：
+    /// 仅在已登录且当前歌单非自己创建时显示；已收藏则按钮文案为「取消收藏」。
+    /// 首页推荐歌单无 creator 字段（视为非本人创建），搜索结果歌单带 creator。
+    /// </summary>
+    private void RefreshPlaylistCollectability()
+    {
+        var p = _trackListPlaylist;
+        if (p is not null
+            && _loginSession.HasSession
+            && (p.Creator is null || p.Creator.UserId != _loginSession.UserId))
+        {
+            TrackListCollectVisible = true;
+            TrackListIsCollected = _collectedPlaylistIds.Contains(p.Id);
+        }
+        else
+        {
+            TrackListCollectVisible = false;
+            TrackListIsCollected = false;
+        }
+    }
+
+    /// <summary>从「我收藏的歌单」显示集合重建收藏 id 集合（供歌曲列表页头部「收藏歌单」判断是否已收藏）。</summary>
+    private void RebuildCollectedSet()
+    {
+        _collectedPlaylistIds.Clear();
+        foreach (var p in CollectedPlaylists)
+        {
+            _collectedPlaylistIds.Add(p.Id);
+        }
+
+        _collectedSetLoaded = true;
+        RefreshPlaylistCollectability();
+    }
+
+    /// <summary>
+    /// 后台拉取「我收藏的歌单」id 集合。首次启动/登录后调用，避免已收藏的歌单
+    /// 在歌曲列表页头部仍显示「收藏歌单」按钮；失败时按未收藏处理，不阻塞界面。
+    /// </summary>
+    private async Task EnsureCollectedSetLoadedAsync()
+    {
+        // 无会话或旧会话缺 userId（稍后进「我的歌单」会补齐并重建集合）时跳过。
+        if (!_loginSession.HasSession || _loginSession.UserId <= 0 || _collectedSetLoaded)
+        {
+            return;
+        }
+
+        try
+        {
+            var playlists = await _apiClient.GetUserPlaylistsAsync(_loginSession.UserId).ConfigureAwait(false);
+            _collectedPlaylistIds.Clear();
+            foreach (var p in playlists)
+            {
+                // 非我创建的歌单即「我收藏的」（与我的歌单页分组一致）。
+                if (p.Creator?.UserId != _loginSession.UserId)
+                {
+                    _collectedPlaylistIds.Add(p.Id);
+                }
+            }
+
+            _collectedSetLoaded = true;
+            await BackToUiAsync();
+            RefreshPlaylistCollectability();
+        }
+        catch (Exception)
+        {
+            // 拿不到收藏列表时按未收藏处理，不影响使用。
+        }
+    }
+
+    /// <summary>
+    /// 收藏/取消收藏当前歌曲列表页的歌单（订阅/退订）。需登录。
+    /// 当前已收藏则取消（按钮变回「收藏歌单」），未收藏则收藏（按钮变「取消收藏」）。
+    /// 收藏后歌单出现在「我的歌单」的收藏分组。
+    /// </summary>
+    public async Task CollectTrackListPlaylistAsync()
+    {
+        if (_trackListPlaylist is null)
+        {
+            return;
+        }
+
+        if (!_loginSession.HasSession)
+        {
+            StatusText = "请先登录，才能收藏歌单。";
+            return;
+        }
+
+        var shouldCollect = !_collectedPlaylistIds.Contains(_trackListPlaylist.Id);
+        try
+        {
+            await _apiClient.SubscribePlaylistAsync(_trackListPlaylist.Id, shouldCollect);
+            await BackToUiAsync();
+            if (shouldCollect)
+            {
+                _collectedPlaylistIds.Add(_trackListPlaylist.Id);
+                TrackListIsCollected = true;
+                StatusText = $"已收藏歌单「{_trackListPlaylist.DisplayName}」，可在「我的歌单」查看。";
+            }
+            else
+            {
+                _collectedPlaylistIds.Remove(_trackListPlaylist.Id);
+                TrackListIsCollected = false;
+                StatusText = $"已取消收藏歌单「{_trackListPlaylist.DisplayName}」。";
+            }
+        }
+        catch (Exception ex)
+        {
+            await BackToUiAsync();
+            StatusText = GetFriendlyMessage(ex);
+        }
     }
 
     /// <summary>
@@ -1578,6 +1755,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     /// <summary>首页进入时加载：快捷卡片 + 推荐歌单 + 喜欢封面 + 日推封面。不设 IsBusy（不动 Songs）。</summary>
     public async Task LoadHomeAsync()
     {
+        // 后台补一次收藏歌单集合，保证首页推荐歌单的「收藏」按钮状态正确（不阻塞首页）。
+        _ = EnsureCollectedSetLoadedAsync();
         // 先同步建卡（保证喜欢/日推/雷达卡片始终就位），再填充各卡片内容。
         EnsureHomeQuickCards();
         await LoadRecommendedPlaylistsAsync();
@@ -1612,13 +1791,20 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
         foreach (var (id, title) in DailyPlaylists)
         {
-            HomeQuickCards.Add(new HomeQuickCard
+            var card = new HomeQuickCard
             {
                 Kind = HomeQuickCardKind.DailyPlaylist,
                 PlaylistId = id,
                 Title = title,
                 Subtitle = "每日更新",
-            });
+            };
+            // 日系雷达使用固定封面（The des Alizes 专辑封面），其余日推歌单由后台刷新拉取。
+            if (id == JpRadarPlaylistId)
+            {
+                card.CoverUrl = JpRadarFixedCover;
+            }
+
+            HomeQuickCards.Add(card);
         }
     }
 
@@ -1633,7 +1819,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             try
             {
                 var playlist = await FetchUiAsync(_apiClient.GetPlaylistAsync(card.PlaylistId));
-                if (!string.IsNullOrWhiteSpace(playlist.CoverUrl))
+                // 日系雷达使用固定封面，刷新时只更新歌曲数、不覆盖封面；其余日推歌单照常更新封面。
+                if (card.PlaylistId != JpRadarPlaylistId && !string.IsNullOrWhiteSpace(playlist.CoverUrl))
                 {
                     card.CoverUrl = playlist.CoverUrl;
                 }
@@ -1810,6 +1997,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         _currentIndex = -1;
         ResetSearchKeyword();
         TrackListTitle = "今日推荐";
+        TrackListCoverUrl = _dailySongs.FirstOrDefault()?.CoverUrl ?? string.Empty;
+        _trackListPlaylist = null;
+        RefreshPlaylistCollectability();
         StatusText = $"今日推荐已加载 {Songs.Count} 首，双击歌曲开始播放。";
     }
 
@@ -2159,6 +2349,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         }
 
         TrackListTitle = playlist.DisplayName;
+        TrackListCoverUrl = playlist.CoverUrl;
+        _trackListPlaylist = playlist;
+        RefreshPlaylistCollectability();
         ResetSearchKeyword();
 
         // 仅「我创建的歌单」使用自己的曲目缓存（秒开）；其他歌单不缓存，立即清空列表，
@@ -2327,6 +2520,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             SetListContext(ListContext.Other);
             Songs.Clear();
             TrackListTitle = card.Title;
+            TrackListCoverUrl = card.CoverUrl;
+            _trackListPlaylist = null;
+            RefreshPlaylistCollectability();
 
             var songs = await FetchUiAsync(_apiClient.GetPlaylistTracksAsync(card.PlaylistId, 50));
             foreach (var song in songs)
@@ -2364,6 +2560,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             SetListContext(ListContext.Other);
             Songs.Clear();
             TrackListTitle = album.DisplayName;
+            TrackListCoverUrl = album.CoverUrl ?? string.Empty;
+            _trackListPlaylist = null;
+            RefreshPlaylistCollectability();
 
             var songs = await FetchUiAsync(_apiClient.GetAlbumTracksAsync(album.Id));
             foreach (var song in songs)
@@ -2402,6 +2601,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             SetListContext(ListContext.Other);
             Songs.Clear();
             TrackListTitle = artist.DisplayName;
+            TrackListCoverUrl = artist.CoverUrl ?? string.Empty;
+            _trackListPlaylist = null;
+            RefreshPlaylistCollectability();
 
             var songs = await FetchUiAsync(_apiClient.GetArtistTopSongsAsync(artist.Id));
             foreach (var song in songs)
@@ -2798,6 +3000,10 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             // 登出后喜欢集合失效，红心图标复位。
             _likedSongIds.Clear();
             CurrentSongLiked = false;
+            // 登出后收藏歌单集合失效，「收藏」按钮不再显示。
+            _collectedPlaylistIds.Clear();
+            _collectedSetLoaded = false;
+            RefreshPlaylistCollectability();
             // 登出后我的歌单列表缓存失效，避免下个账号看到上个人的歌单。
             _myPlaylistCache.Clear();
             CreatedPlaylists.Clear();
@@ -2894,6 +3100,12 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                     // 登录后拉喜欢列表失败不影响登录成功，红心状态维持默认。
                 }
             });
+
+            // 换账号登录时先清掉旧的收藏集合，再后台拉一次「我收藏的歌单」，
+            // 保证歌单「收藏」按钮状态正确。
+            _collectedPlaylistIds.Clear();
+            _collectedSetLoaded = false;
+            _ = EnsureCollectedSetLoadedAsync();
         }
     }
 

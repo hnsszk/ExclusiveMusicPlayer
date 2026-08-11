@@ -16,14 +16,17 @@ public sealed class LocalApiService
     /// <summary>本地 API 目录名（相对于播放器可执行文件所在目录）。</summary>
     private const string ApiDirName = "api-server";
 
+    /// <summary>开发模式下的回退目录名（仓库内存在的精简/源码 API 形态）。</summary>
+    private static readonly string[] DevApiDirNames = { "api-server", "api-dist-test", "api-enhanced" };
+
     /// <summary>本地 API 默认端口。</summary>
     public const int DefaultPort = 3000;
 
     /// <summary>每次探测就绪的等待间隔。</summary>
     private static readonly TimeSpan ProbeInterval = TimeSpan.FromMilliseconds(400);
 
-    /// <summary>就绪超时：超过则放弃等待（不阻塞进入播放器）。</summary>
-    private static readonly TimeSpan ReadyTimeout = TimeSpan.FromSeconds(20);
+    /// <summary>就绪超时：超过则放弃等待（不阻塞进入播放器，由主窗口后台补拉起）。</summary>
+    private static readonly TimeSpan ReadyTimeout = TimeSpan.FromSeconds(60);
 
     /// <summary>进程内共享实例（SplashWindow 启动、App 退出时 Stop 共用）。</summary>
     public static LocalApiService Instance { get; } = new();
@@ -38,8 +41,9 @@ public sealed class LocalApiService
     public string? LocalApiBaseUrl { get; private set; }
 
     /// <summary>
-    /// 定位本地 API 目录。分发时优先播放器 exe 旁的同名目录；开发（未发布）时回退到
-    /// 项目根目录（仓库内包含 api-enhanced 与 api-dist-test 两种形态）。找不到返回 null。
+    /// 定位本地 API 目录。分发时优先播放器 exe 旁的同名目录（api-server）；
+    /// 开发（未发布，dotnet run）时逐级向上找仓库根，识别 api-dist-test / api-enhanced
+    /// 等源码形态的 API 目录。找不到返回 null。
     /// </summary>
     private static string? FindApiDir()
     {
@@ -54,14 +58,18 @@ public sealed class LocalApiService
             }
         }
 
-        // 开发：逐级向上找包含 api-enhanced 的仓库根（bin\Debug\net8.0-windows 等）。
+        // 开发：逐级向上找仓库根（bin\Debug\net8.0-windows 等），
+        // 依次识别 api-server / api-dist-test / api-enhanced 三种目录名。
         var dir = new DirectoryInfo(Environment.CurrentDirectory);
         for (var d = dir; d is not null; d = d.Parent)
         {
-            var candidate = Path.Combine(d.FullName, ApiDirName);
-            if (Directory.Exists(candidate))
+            foreach (var name in DevApiDirNames)
             {
-                return candidate;
+                var candidate = Path.Combine(d.FullName, name);
+                if (Directory.Exists(candidate))
+                {
+                    return candidate;
+                }
             }
         }
 

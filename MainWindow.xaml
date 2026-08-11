@@ -104,6 +104,93 @@
             </Setter>
         </Style>
 
+        <!-- 「播放全部」紧凑版：仅用于歌曲列表页头部，比 ActionButtonStyle 稍小，不影响其他页面。 -->
+        <Style x:Key="CompactActionButtonStyle" TargetType="Button">
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="MinWidth" Value="64" />
+            <Setter Property="Padding" Value="12,0" />
+            <Setter Property="Margin" Value="0,0,8,0" />
+            <Setter Property="Background" Value="#E4533C" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="BorderBrush" Value="#E4533C" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Root"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              Margin="{TemplateBinding Padding}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="#D6492F" />
+                                <Setter TargetName="Root" Property="BorderBrush" Value="#D6492F" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="#C2442D" />
+                                <Setter TargetName="Root" Property="BorderBrush" Value="#C2442D" />
+                                <Setter TargetName="Root" Property="RenderTransform">
+                                    <Setter.Value>
+                                        <TranslateTransform Y="1" />
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Root" Property="Opacity" Value="0.45" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- 「收藏歌单」按钮：次生风格（白底灰描边），与「播放全部」同尺寸，形成主次层级。 -->
+        <Style x:Key="TrackListCollectButtonStyle" TargetType="Button">
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="MinWidth" Value="76" />
+            <Setter Property="Padding" Value="12,0" />
+            <Setter Property="Background" Value="#FFFFFF" />
+            <Setter Property="Foreground" Value="#202124" />
+            <Setter Property="BorderBrush" Value="#D8DADF" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Root"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              Margin="{TemplateBinding Padding}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="#F6F7F9" />
+                                <Setter TargetName="Root" Property="BorderBrush" Value="#C6CAD4" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="#E9EBEF" />
+                                <Setter TargetName="Root" Property="BorderBrush" Value="#B8BCC6" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="IconButtonStyle" TargetType="Button">
             <Setter Property="FocusVisualStyle" Value="{x:Null}" />
             <Setter Property="Height" Value="40" />
@@ -286,12 +373,51 @@
                         <Border Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="8">
+                                CornerRadius="18">
                             <Grid>
                                 <TextBlock Text="&#xE721;"
                                            FontFamily="Segoe MDL2 Assets"
                                            Foreground="#9AA3AF"
                                            FontSize="13"
+                                           Margin="10,0,0,0"
+                                           VerticalAlignment="Center"
+                                           HorizontalAlignment="Left" />
+                                <ScrollViewer x:Name="PART_ContentHost"
+                                              Margin="30,0,10,0"
+                                              VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter Property="BorderBrush" Value="#E4533C" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- 歌曲列表页头部搜索框：胶囊形（两端半圆，CornerRadius=高度一半），比常规搜索框略小。 -->
+        <Style x:Key="SearchBoxPillStyle" TargetType="TextBox">
+            <Setter Property="Height" Value="30" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Foreground" Value="#202124" />
+            <Setter Property="Background" Value="#CCFFFFFF" />
+            <Setter Property="BorderBrush" Value="#B8D8DADF" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="15">
+                            <Grid>
+                                <TextBlock Text="&#xE721;"
+                                           FontFamily="Segoe MDL2 Assets"
+                                           Foreground="#9AA3AF"
+                                           FontSize="12"
                                            Margin="10,0,0,0"
                                            VerticalAlignment="Center"
                                            HorizontalAlignment="Left" />
@@ -1108,7 +1234,7 @@
                                    FontSize="12" />
                         <TextBox Style="{StaticResource SearchBoxStyle}"
                                  Width="220"
-                                 Height="32"
+                                 Height="36"
                                  Text="{Binding ListFilterText, UpdateSourceTrigger=PropertyChanged}" />
                     </StackPanel>
                 </StackPanel>
@@ -1130,17 +1256,26 @@
                                FontSize="12" />
                 </StackPanel>
 
-                <!-- 歌曲列表页头部（点进歌单）：返回 + 标题 + 播放全部 + 列表内搜索。
-                     无全站搜索框/类型选择器，样式与「喜欢的音乐」统一。 -->
-                <StackPanel Grid.Row="1"
-                            x:Name="TrackListHeader"
-                            Visibility="Collapsed"
-                            Margin="0,0,0,16"
-                            Orientation="Horizontal">
+                <!-- 歌曲列表页头部（点进歌单）：返回 + 封面缩略图 + 名称/播放全部/收藏 + 列表内搜索。
+                     缩略图圆角裁剪沿用双层 Border + ImageBrush 技巧；「收藏歌单」仅可收藏歌单页显示。 -->
+                <Grid Grid.Row="1"
+                      x:Name="TrackListHeader"
+                      Visibility="Collapsed"
+                      Margin="0,0,0,16"
+                      SizeChanged="TrackListHeader_SizeChanged">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <!-- 缩略图列：随窗口自适应缩放（96→160），窗口窄时保持 96 最小。 -->
+                        <ColumnDefinition Width="2*" MinWidth="96" MaxWidth="160" />
+                        <ColumnDefinition Width="10*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
                     <Button x:Name="TrackBackButton"
+                            Grid.Column="0"
                             Width="36"
                             Height="36"
-                            Margin="0,0,12,0"
+                            Margin="0,0,6,0"
                             VerticalAlignment="Center"
                             Cursor="Hand"
                             Background="Transparent"
@@ -1167,32 +1302,56 @@
                                    Foreground="#202124"
                                    VerticalAlignment="Center" />
                     </Button>
-                    <TextBlock Text="{Binding TrackListTitle}"
-                               VerticalAlignment="Center"
-                               Foreground="#202124"
-                               FontSize="22"
-                               FontWeight="SemiBold"
-                               TextTrimming="CharacterEllipsis"
-                               MaxWidth="240"
-                               MouseLeftButtonDown="TitleBar_MouseLeftButtonDown" />
-                    <Button Content="播放全部"
-                            Style="{StaticResource ActionButtonStyle}"
-                            Margin="16,0,0,0"
-                            Click="PlayAllSongs_Click" />
-                    <StackPanel Margin="20,0,0,0"
-                                Orientation="Horizontal"
+
+                    <!-- 内容缩略图：Viewbox 随列宽自适应缩放（最大 160），圆角 12 双层 Border 裁剪，占位色透出。 -->
+                    <Viewbox Grid.Column="1"
+                             Stretch="Uniform"
+                             HorizontalAlignment="Stretch"
+                             VerticalAlignment="Top">
+                        <Grid Width="96" Height="96">
+                            <Border Background="#F0E4DF"
+                                    CornerRadius="12" />
+                            <Border CornerRadius="12">
+                                <Border.Background>
+                                    <ImageBrush ImageSource="{Binding TrackListCoverUrl}"
+                                                Stretch="UniformToFill" />
+                                </Border.Background>
+                            </Border>
+                        </Grid>
+                    </Viewbox>
+
+                    <!-- 中间：标题在上、按钮在下，紧凑上下相邻并垂直居中于缩略图旁，
+                         避免头部随缩略图变高时标题与按钮之间空隙过大。标题字号随头部高度自适应。 -->
+                    <StackPanel Grid.Column="2"
+                                Margin="16,0,0,0"
                                 VerticalAlignment="Center">
-                        <TextBlock Text="在列表中搜索"
-                                   Margin="0,0,8,0"
-                                   VerticalAlignment="Center"
-                                   Foreground="#9CA3AF"
-                                   FontSize="12" />
-                        <TextBox Style="{StaticResource SearchBoxStyle}"
-                                 Width="220"
-                                 Height="32"
-                                 Text="{Binding ListFilterText, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock x:Name="TrackListTitleText"
+                                   Text="{Binding TrackListTitle}"
+                                   Foreground="#202124"
+                                   FontSize="22"
+                                   FontWeight="SemiBold"
+                                   TextTrimming="CharacterEllipsis"
+                                   MouseLeftButtonDown="TitleBar_MouseLeftButtonDown" />
+                        <StackPanel Orientation="Horizontal"
+                                    Margin="0,14,0,0">
+                            <Button Content="播放全部"
+                                    Style="{StaticResource CompactActionButtonStyle}"
+                                    Click="PlayAllSongs_Click" />
+                            <Button Content="{Binding TrackListCollectText}"
+                                    Style="{StaticResource TrackListCollectButtonStyle}"
+                                    Click="CollectTrackListButton_Click"
+                                    Visibility="{Binding TrackListCollectVisible, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                        </StackPanel>
                     </StackPanel>
-                </StackPanel>
+
+                    <!-- 列表内搜索：胶囊形、右对齐、底部与缩略图底部对齐。 -->
+                    <TextBox Grid.Column="3"
+                             Style="{StaticResource SearchBoxPillStyle}"
+                             Width="200"
+                             Margin="16,0,0,0"
+                             VerticalAlignment="Bottom"
+                             Text="{Binding ListFilterText, UpdateSourceTrigger=PropertyChanged}" />
+                </Grid>
 
                 <!-- 歌曲列表 -->
                 <Grid Grid.Row="2" x:Name="SongListContainer">
@@ -1768,13 +1927,13 @@
                                 </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <!-- 封面填满列宽（正方形）：Viewbox 等比缩放，宽度=列宽，
-                                             高度随列宽自适应，最大化时封面放大、不留空白。 -->
                                         <Button Style="{StaticResource HomeCardButtonStyle}"
                                                 Margin="0,0,10,10"
                                                 HorizontalContentAlignment="Stretch"
                                                 VerticalContentAlignment="Top"
                                                 Click="RecommendedPlaylistCard_Click">
+                                            <!-- 封面填满列宽（正方形）：Viewbox 等比缩放，宽度=列宽，
+                                                 高度随列宽自适应，最大化时封面放大、不留空白。 -->
                                             <StackPanel>
                                                 <Viewbox Stretch="Uniform"
                                                          HorizontalAlignment="Stretch"
